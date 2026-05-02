@@ -8,6 +8,7 @@ const updateTaskSchema = z.object({
   title: z.string().min(1).max(255).optional(),
   description: z.string().optional().nullable(),
   priority: z.number().min(0).max(2).optional(),
+  category: z.string().optional(),
   completed: z.boolean().optional(),
 });
 

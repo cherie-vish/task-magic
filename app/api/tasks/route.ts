@@ -8,6 +8,7 @@ const createTaskSchema = z.object({
   title: z.string().min(1, 'Title is required').max(255),
   description: z.string().optional(),
   priority: z.number().min(0).max(2).default(1),
+  category: z.string().default('other'),
   completed: z.boolean().optional(),
 });
 
@@ -33,6 +34,7 @@ export async function POST(request: Request) {
       title: validatedData.title,
       description: validatedData.description || null,
       priority: validatedData.priority,
+      category: validatedData.category,
       completed: validatedData.completed || false,
     }).returning();
     
