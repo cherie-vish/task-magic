@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { tasks } from '@/lib/db/schema';
-import { eq, desc } from 'drizzle-orm';
+import { desc } from 'drizzle-orm';
 import { z } from 'zod';
 
 const createTaskSchema = z.object({
@@ -9,6 +9,7 @@ const createTaskSchema = z.object({
   description: z.string().optional(),
   priority: z.number().min(0).max(2).default(1),
   category: z.string().default('other'),
+  dueDate: z.string().nullable().optional(),
   completed: z.boolean().optional(),
 });
 
@@ -35,6 +36,7 @@ export async function POST(request: Request) {
       description: validatedData.description || null,
       priority: validatedData.priority,
       category: validatedData.category,
+      dueDate: validatedData.dueDate ? new Date(validatedData.dueDate) : null,
       completed: validatedData.completed || false,
     }).returning();
     

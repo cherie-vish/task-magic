@@ -9,6 +9,7 @@ const updateTaskSchema = z.object({
   description: z.string().optional().nullable(),
   priority: z.number().min(0).max(2).optional(),
   category: z.string().optional(),
+  dueDate: z.string().nullable().optional(),
   completed: z.boolean().optional(),
 });
 
@@ -46,11 +47,17 @@ export async function PUT(
     const body = await request.json();
     const validatedData = updateTaskSchema.parse(body);
     
+    const updateData: any = {
+      ...validatedData,
+      updatedAt: new Date(),
+    };
+    
+    if (validatedData.dueDate !== undefined) {
+      updateData.dueDate = validatedData.dueDate ? new Date(validatedData.dueDate) : null;
+    }
+    
     const updatedTask = await db.update(tasks)
-      .set({
-        ...validatedData,
-        updatedAt: new Date(),
-      })
+      .set(updateData)
       .where(eq(tasks.id, taskId))
       .returning();
     
