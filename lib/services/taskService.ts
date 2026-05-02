@@ -1,10 +1,12 @@
 export type Priority = 'low' | 'medium' | 'high';
+export type Category = 'work' | 'personal' | 'shopping' | 'health' | 'other';
 
 export interface Task {
   id: number;
   title: string;
   description: string | null;
   priority: number; // 0=low,1=medium,2=high
+  category: string;
   completed: boolean;
   createdAt: string;
   updatedAt: string;
@@ -14,6 +16,7 @@ export interface CreateTaskInput {
   title: string;
   description?: string;
   priority?: number;
+  category?: string;
   completed?: boolean;
 }
 
@@ -21,6 +24,7 @@ export interface UpdateTaskInput {
   title?: string;
   description?: string | null;
   priority?: number;
+  category?: string;
   completed?: boolean;
 }
 
@@ -82,4 +86,12 @@ export const priorityConfig = {
   0: { label: 'Low', color: 'bg-green-500', textColor: 'text-green-700', bgLight: 'bg-green-100' },
   1: { label: 'Medium', color: 'bg-yellow-500', textColor: 'text-yellow-700', bgLight: 'bg-yellow-100' },
   2: { label: 'High', color: 'bg-red-500', textColor: 'text-red-700', bgLight: 'bg-red-100' },
+};
+
+export const categoryConfig = {
+  work: { label: 'Work', icon: '💼', color: 'bg-blue-500', bgLight: 'bg-blue-100', textColor: 'text-blue-700' },
+  personal: { label: 'Personal', icon: '👤', color: 'bg-purple-500', bgLight: 'bg-purple-100', textColor: 'text-purple-700' },
+  shopping: { label: 'Shopping', icon: '🛒', color: 'bg-pink-500', bgLight: 'bg-pink-100', textColor: 'text-pink-700' },
+  health: { label: 'Health', icon: '💪', color: 'bg-emerald-500', bgLight: 'bg-emerald-100', textColor: 'text-emerald-700' },
+  other: { label: 'Other', icon: '📌', color: 'bg-gray-500', bgLight: 'bg-gray-100', textColor: 'text-gray-700' },
 };
