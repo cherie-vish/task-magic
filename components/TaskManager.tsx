@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Checkbox } from '@/components/ui/checkbox';
+import { toast } from 'sonner';
 import {
   Dialog,
   DialogContent,
@@ -23,6 +23,8 @@ export default function TaskManager() {
   const [loading, setLoading] = useState(true);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [taskToDelete, setTaskToDelete] = useState<number | null>(null);
   const [formData, setFormData] = useState<CreateTaskInput>({
     title: '',
     description: '',
@@ -40,7 +42,9 @@ export default function TaskManager() {
       setTasks(data);
     } catch (error) {
       console.error('Failed to load tasks:', error);
-      alert('Failed to load tasks. Please refresh the page.');
+      toast.error('Failed to load tasks', {
+        description: 'Please refresh the page and try again.',
+      });
     } finally {
       setLoading(false);
     }
@@ -48,7 +52,9 @@ export default function TaskManager() {
 
   const handleCreateTask = async () => {
     if (!formData.title.trim()) {
-      alert('Task title is required');
+      toast.warning('Task title is required', {
+        description: 'Please enter a title for your task.',
+      });
       return;
     }
 
@@ -57,16 +63,23 @@ export default function TaskManager() {
       setTasks([newTask, ...tasks]);
       setIsCreateDialogOpen(false);
       resetForm();
+      toast.success('Task created successfully', {
+        description: `"${formData.title}" has been added.`,
+      });
     } catch (error) {
       console.error('Failed to create task:', error);
-      alert('Failed to create task. Please try again.');
+      toast.error('Failed to create task', {
+        description: 'Please try again.',
+      });
     }
   };
 
   const handleUpdateTask = async () => {
     if (!editingTask) return;
     if (!formData.title?.trim()) {
-      alert('Task title is required');
+      toast.warning('Task title is required', {
+        description: 'Please enter a title for your task.',
+      });
       return;
     }
 
@@ -78,9 +91,34 @@ export default function TaskManager() {
       setTasks(tasks.map(task => task.id === updatedTask.id ? updatedTask : task));
       setEditingTask(null);
       resetForm();
+      toast.success('Task updated successfully', {
+        description: `"${updatedTask.title}" has been updated.`,
+      });
     } catch (error) {
       console.error('Failed to update task:', error);
-      alert('Failed to update task. Please try again.');
+      toast.error('Failed to update task', {
+        description: 'Please try again.',
+      });
+    }
+  };
+
+  const confirmDelete = (id: number) => {
+    setTaskToDelete(id);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmedDelete = async () => {
+    if (!taskToDelete) return;
+    
+    try {
+      await taskService.deleteTask(taskToDelete);
+      setTasks(tasks.filter(task => task.id !== taskToDelete));
+      toast.success('Task deleted successfully');
+    } catch (error) {
+      toast.error('Failed to delete task');
+    } finally {
+      setDeleteDialogOpen(false);
+      setTaskToDelete(null);
     }
   };
 
@@ -90,21 +128,17 @@ export default function TaskManager() {
         completed: !task.completed,
       });
       setTasks(tasks.map(t => t.id === updatedTask.id ? updatedTask : t));
+      toast.success(
+        updatedTask.completed ? 'Task completed! 🎉' : 'Task marked as incomplete',
+        {
+          description: `"${updatedTask.title}"`,
+        }
+      );
     } catch (error) {
       console.error('Failed to update task status:', error);
-      alert('Failed to update task status.');
-    }
-  };
-
-  const handleDeleteTask = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this task?')) return;
-
-    try {
-      await taskService.deleteTask(id);
-      setTasks(tasks.filter(task => task.id !== id));
-    } catch (error) {
-      console.error('Failed to delete task:', error);
-      alert('Failed to delete task. Please try again.');
+      toast.error('Failed to update task status', {
+        description: 'Please try again.',
+      });
     }
   };
 
@@ -201,7 +235,7 @@ export default function TaskManager() {
               task={task}
               onToggleComplete={() => handleToggleComplete(task)}
               onEdit={() => openEditDialog(task)}
-              onDelete={() => handleDeleteTask(task.id)}
+              onDelete={() => confirmDelete(task.id)}
             />
           ))}
         </div>
@@ -217,7 +251,7 @@ export default function TaskManager() {
               task={task}
               onToggleComplete={() => handleToggleComplete(task)}
               onEdit={() => openEditDialog(task)}
-              onDelete={() => handleDeleteTask(task.id)}
+              onDelete={() => confirmDelete(task.id)}
             />
           ))}
         </div>
@@ -270,6 +304,26 @@ export default function TaskManager() {
           </DialogContent>
         </Dialog>
       )}
+
+    {/* Custom Delete Confirmation Dialog */}
+    <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>Delete Task?</DialogTitle>
+          <DialogDescription>
+            Are you sure you want to delete this task? This action cannot be undone.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+            Cancel
+          </Button>
+          <Button variant="destructive" onClick={handleConfirmedDelete}>
+            Delete Task
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     </div>
   );
 }
