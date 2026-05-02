@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { taskService, Task, CreateTaskInput, priorityConfig } from '@/lib/services/taskService';
+import { taskService, Task, CreateTaskInput, priorityConfig, categoryConfig } from '@/lib/services/taskService';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -24,6 +24,7 @@ import {
 import { Plus, Pencil, Trash2, CheckCircle, Circle, Search, Flag } from 'lucide-react';
 import { toast } from 'sonner';
 import TaskSkeleton from './TaskSkeleton';
+import CategoryFilter from './CategoryFilter';
 
 export default function TaskManager() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -34,10 +35,12 @@ export default function TaskManager() {
     title: '',
     description: '',
     priority: 1,
+    category: 'other',
   });
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('all');
   const [completingTaskId, setCompletingTaskId] = useState<number | null>(null);
 
   useEffect(() => {
@@ -97,6 +100,7 @@ export default function TaskManager() {
         title: formData.title,
         description: formData.description,
         priority: formData.priority,
+        category: formData.category,
       });
       setTasks(tasks.map(task => task.id === updatedTask.id ? updatedTask : task));
       setEditingTask(null);
@@ -164,7 +168,7 @@ export default function TaskManager() {
   };
 
   const resetForm = () => {
-    setFormData({ title: '', description: '', priority: 1 });
+    setFormData({ title: '', description: '', priority: 1, category: 'other' });
   };
 
   const openEditDialog = (task: Task) => {
@@ -173,13 +177,16 @@ export default function TaskManager() {
       title: task.title,
       description: task.description || '',
       priority: task.priority,
+      category: task.category,
     });
   };
 
-  const filteredTasks = tasks.filter(task =>
-    task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (task.description && task.description.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const filteredTasks = tasks.filter(task => {
+    const matchesSearch = task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (task.description && task.description.toLowerCase().includes(searchTerm.toLowerCase()));
+    const matchesCategory = selectedCategory === 'all' || task.category === selectedCategory;
+    return matchesSearch && matchesCategory;
+  });
 
   const sortedTasks = [...filteredTasks].sort((a, b) => {
     if (a.completed !== b.completed) return a.completed ? 1 : -1;
@@ -200,6 +207,16 @@ export default function TaskManager() {
     );
   };
 
+  const CategoryBadge = ({ category }: { category: string }) => {
+    const config = categoryConfig[category as keyof typeof categoryConfig];
+    return (
+      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${config.bgLight} ${config.textColor}`}>
+        <span>{config.icon}</span>
+        {config.label}
+      </span>
+    );
+  };
+
   return (
     <div className="container max-w-4xl mx-auto p-4 sm:p-6 space-y-6">
       {/* Header */}
@@ -211,22 +228,25 @@ export default function TaskManager() {
             {loading && 'Loading tasks...'}
           </p>
         </div>
-        <div className="flex gap-2 w-full sm:w-auto">
-          <div className="relative flex-1 sm:w-64">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search tasks..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 w-full"
-              disabled={loading}
-            />
-          </div>
-          <Button onClick={() => setIsCreateDialogOpen(true)} disabled={loading}>
-            <Plus className="mr-2 h-4 w-4" />
-            New Task
-          </Button>
+        <Button onClick={() => setIsCreateDialogOpen(true)} disabled={loading}>
+          <Plus className="mr-2 h-4 w-4" />
+          New Task
+        </Button>
+      </div>
+
+      {/* Filters */}
+      <div className="space-y-4">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search tasks..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-9 w-full"
+            disabled={loading}
+          />
         </div>
+        <CategoryFilter selectedCategory={selectedCategory} onCategoryChange={setSelectedCategory} />
       </div>
 
       {/* Task List Area */}
@@ -246,6 +266,7 @@ export default function TaskManager() {
                   onDelete={() => confirmDelete(task.id)}
                   isUpdating={completingTaskId === task.id}
                   PriorityBadge={PriorityBadge}
+                  CategoryBadge={CategoryBadge}
                 />
               ))}
             </div>
@@ -263,6 +284,7 @@ export default function TaskManager() {
                   onDelete={() => confirmDelete(task.id)}
                   isUpdating={completingTaskId === task.id}
                   PriorityBadge={PriorityBadge}
+                  CategoryBadge={CategoryBadge}
                 />
               ))}
             </div>
@@ -275,9 +297,9 @@ export default function TaskManager() {
                   <p className="text-muted-foreground">No tasks yet. Create your first task!</p>
                 ) : (
                   <div>
-                    <p className="text-muted-foreground">No tasks found matching "{searchTerm}"</p>
-                    <Button variant="link" onClick={() => setSearchTerm('')} className="mt-2">
-                      Clear search
+                    <p className="text-muted-foreground">No tasks found matching your filters</p>
+                    <Button variant="link" onClick={() => { setSearchTerm(''); setSelectedCategory('all'); }} className="mt-2">
+                      Clear filters
                     </Button>
                   </div>
                 )}
@@ -314,21 +336,41 @@ export default function TaskManager() {
                 rows={3}
               />
             </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Priority</label>
-              <Select
-                value={String(formData.priority ?? 1)}
-                onValueChange={(value) => setFormData({ ...formData, priority: parseInt(value) })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select priority" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="0">Low</SelectItem>
-                  <SelectItem value="1">Medium</SelectItem>
-                  <SelectItem value="2">High</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Priority</label>
+                  <Select
+                    value={String(formData.priority ?? 1)}
+                    onValueChange={(value) => setFormData({ ...formData, priority: parseInt(value as string) })}
+                  >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select priority" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">Low</SelectItem>
+                    <SelectItem value="1">Medium</SelectItem>
+                    <SelectItem value="2">High</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Category</label>
+                  <Select
+                    value={formData.category ?? 'other'}
+                    onValueChange={(value) => setFormData({ ...formData, category: value as string })}
+                  >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="work">💼 Work</SelectItem>
+                    <SelectItem value="personal">👤 Personal</SelectItem>
+                    <SelectItem value="shopping">🛒 Shopping</SelectItem>
+                    <SelectItem value="health">💪 Health</SelectItem>
+                    <SelectItem value="other">📌 Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
           <DialogFooter>
@@ -368,21 +410,41 @@ export default function TaskManager() {
                   rows={3}
                 />
               </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Priority</label>
-                <Select
-                  value={String(formData.priority ?? 1)}
-                  onValueChange={(value) => setFormData({ ...formData, priority: parseInt(value) })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select priority" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="0">Low</SelectItem>
-                    <SelectItem value="1">Medium</SelectItem>
-                    <SelectItem value="2">High</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Priority</label>
+                    <Select
+                      value={String(formData.priority ?? 1)}
+                      onValueChange={(value) => setFormData({ ...formData, priority: parseInt(value as string) })}
+                    >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select priority" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">Low</SelectItem>
+                      <SelectItem value="1">Medium</SelectItem>
+                      <SelectItem value="2">High</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Category</label>
+                    <Select
+                      value={formData.category ?? 'other'}
+                      onValueChange={(value) => setFormData({ ...formData, category: value as string })}
+                    >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="work">💼 Work</SelectItem>
+                      <SelectItem value="personal">👤 Personal</SelectItem>
+                      <SelectItem value="shopping">🛒 Shopping</SelectItem>
+                      <SelectItem value="health">💪 Health</SelectItem>
+                      <SelectItem value="other">📌 Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
             <DialogFooter>
@@ -419,13 +481,14 @@ export default function TaskManager() {
 }
 
 // Task Card Component
-function TaskCard({ task, onToggleComplete, onEdit, onDelete, isUpdating, PriorityBadge }: {
+function TaskCard({ task, onToggleComplete, onEdit, onDelete, isUpdating, PriorityBadge, CategoryBadge }: {
   task: Task;
   onToggleComplete: () => void;
   onEdit: () => void;
   onDelete: () => void;
   isUpdating: boolean;
   PriorityBadge: React.ComponentType<{ priority: number }>;
+  CategoryBadge: React.ComponentType<{ category: string }>;
 }) {
   return (
     <Card className={`transition-all ${task.completed ? 'opacity-75' : ''}`}>
@@ -450,6 +513,7 @@ function TaskCard({ task, onToggleComplete, onEdit, onDelete, isUpdating, Priori
                 {task.title}
               </h3>
               <PriorityBadge priority={task.priority} />
+              <CategoryBadge category={task.category} />
               {isUpdating && (
                 <span className="text-xs text-muted-foreground">(updating...)</span>
               )}
