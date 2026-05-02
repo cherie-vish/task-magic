@@ -22,6 +22,13 @@
       "when": 1777701025440,
       "tag": "0002_low_human_cannonball",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1777701931072,
+      "tag": "0003_dry_lilandra",
+      "breakpoints": true
     }
   ]
 }

@@ -8,7 +8,8 @@ export const tasks = pgTable('tasks', {
   title: text('title').notNull(),
   description: text('description'),
   priority: integer('priority').default(1).notNull(), // 0=low,1=medium,2=high
-  category: text('category').default('other').notNull(), // work, personal, shopping, health, other
+  category: text('category').default('other').notNull(),
+  dueDate: timestamp('due_date'),
   completed: boolean('completed').default(false).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
