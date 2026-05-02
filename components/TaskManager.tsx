@@ -14,7 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Plus, Pencil, Trash2, CheckCircle, Circle } from 'lucide-react';
+import { Plus, Pencil, Search, Trash2, CheckCircle, Circle } from 'lucide-react';
 import { toast } from 'sonner';
 import TaskSkeleton from './TaskSkeleton';
 
@@ -29,7 +29,7 @@ export default function TaskManager() {
   });
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState<number | null>(null);
-
+  const [searchTerm, setSearchTerm] = useState('');
   // Load tasks on component mount
   useEffect(() => {
     loadTasks();
@@ -159,33 +159,47 @@ export default function TaskManager() {
     });
   };
 
-  const sortedTasks = [...tasks].sort((a, b) => {
-    // Incomplete tasks first, then by creation date
-    if (a.completed !== b.completed) return a.completed ? 1 : -1;
-    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-  });
+const sortedTasks = [...tasks].sort((a, b) => {
+  if (a.completed !== b.completed) return a.completed ? 1 : -1;
+  return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+});
 
-  const incompleteTasks = sortedTasks.filter(t => !t.completed);
-  const completedTasks = sortedTasks.filter(t => t.completed);
+// Add this filter
+const filteredTasks = sortedTasks.filter(task =>
+  task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+  (task.description && task.description.toLowerCase().includes(searchTerm.toLowerCase()))
+);
 
-  return (
+const incompleteTasks = filteredTasks.filter(t => !t.completed);
+const completedTasks = filteredTasks.filter(t => t.completed);
+return (
     <div className="container max-w-4xl mx-auto p-4 sm:p-6 space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold">Task Manager</h1>
-          <p className="text-muted-foreground mt-1">
-            {!loading && `${tasks.length} task${tasks.length !== 1 ? 's' : ''} total`}
-            {loading && 'Loading tasks...'}
-          </p>
-        </div>
-        <Button onClick={() => setIsCreateDialogOpen(true)} disabled={loading}>
-          <Plus className="mr-2 h-4 w-4" />
-          New Task
-        </Button>
-      </div>
-
-      {/* Task List Area - Show Skeleton OR Actual Tasks */}
+{/* Header */}
+<div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+  <div>
+    <h1 className="text-3xl font-bold">Task Manager</h1>
+    <p className="text-muted-foreground mt-1">
+      {!loading && `${tasks.length} task${tasks.length !== 1 ? 's' : ''} total`}
+      {loading && 'Loading tasks...'}
+    </p>
+  </div>
+  <div className="flex gap-2 w-full sm:w-auto">
+    <div className="relative flex-1 sm:w-64">
+      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+      <Input
+        placeholder="Search tasks..."
+        value={searchTerm}
+        onChange={(e) => setSearchTerm(e.target.value)}
+        className="pl-9 w-full"
+        disabled={loading}
+      />
+    </div>
+    <Button onClick={() => setIsCreateDialogOpen(true)} disabled={loading}>
+      <Plus className="mr-2 h-4 w-4" />
+      New Task
+    </Button>
+  </div>
+</div>      {/* Task List Area - Show Skeleton OR Actual Tasks */}
       {loading ? (
         <TaskSkeleton />
       ) : (
@@ -222,15 +236,27 @@ export default function TaskManager() {
             </div>
           )}
 
-          {/* Empty State */}
-          {tasks.length === 0 && (
+          {/* No Results or Empty State */}
+          {filteredTasks.length === 0 && (
             <Card className="text-center py-12">
               <CardContent>
-                <p className="text-muted-foreground">No tasks yet. Create your first task!</p>
+                {tasks.length === 0 ? (
+                  <p className="text-muted-foreground">No tasks yet. Create your first task!</p>
+                ) : (
+                  <div>
+                    <p className="text-muted-foreground">No tasks found matching "{searchTerm}"</p>
+                    <Button 
+                      variant="link" 
+                      onClick={() => setSearchTerm('')}
+                      className="mt-2"
+                    >
+                      Clear search
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
-          )}
-        </>
+          )}        </>
       )}
 
       {/* Create Task Dialog */}
