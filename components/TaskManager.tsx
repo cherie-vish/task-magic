@@ -30,6 +30,8 @@ export default function TaskManager() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [completingTaskId, setCompletingTaskId] = useState<number | null>(null);
+
   // Load tasks on component mount
   useEffect(() => {
     loadTasks();
@@ -102,25 +104,35 @@ export default function TaskManager() {
     }
   };
 
-  const handleToggleComplete = async (task: Task) => {
-    try {
-      const updatedTask = await taskService.updateTask(task.id, {
-        completed: !task.completed,
-      });
-      setTasks(tasks.map(t => t.id === updatedTask.id ? updatedTask : t));
-      toast.success(
-        updatedTask.completed ? 'Task completed! 🎉' : 'Task marked as incomplete',
-        {
-          description: `"${updatedTask.title}"`,
-        }
-      );
-    } catch (error) {
-      console.error('Failed to update task status:', error);
-      toast.error('Failed to update task status', {
-        description: 'Please try again.',
-      });
-    }
-  };
+const handleToggleComplete = async (task: Task) => {
+  // Set loading state for this specific task
+  setCompletingTaskId(task.id);
+  
+  try {
+    // Wait for server response FIRST
+    const updatedTask = await taskService.updateTask(task.id, {
+      completed: !task.completed,
+    });
+    
+    // ONLY update UI after server confirms
+    setTasks(tasks.map(t => t.id === updatedTask.id ? updatedTask : t));
+    
+    toast.success(
+      !task.completed ? 'Task completed! 🎉' : 'Task marked as incomplete',
+      {
+        description: `"${updatedTask.title}"`,
+      }
+    );
+  } catch (error) {
+    console.error('Failed to update task status:', error);
+    toast.error('Failed to update task status', {
+      description: 'Please try again.',
+    });
+  } finally {
+    // Clear loading state
+    setCompletingTaskId(null);
+  }
+};
 
   const confirmDelete = (id: number) => {
     setTaskToDelete(id);
@@ -208,15 +220,16 @@ return (
           {incompleteTasks.length > 0 && (
             <div className="space-y-3">
               <h2 className="text-xl font-semibold">To Do</h2>
-              {incompleteTasks.map((task) => (
-                <TaskCard
-                  key={task.id}
-                  task={task}
-                  onToggleComplete={() => handleToggleComplete(task)}
-                  onEdit={() => openEditDialog(task)}
-                  onDelete={() => confirmDelete(task.id)}
-                />
-              ))}
+                {incompleteTasks.map((task) => (
+                  <TaskCard
+                    key={task.id}
+                    task={task}
+                    onToggleComplete={() => handleToggleComplete(task)}
+                    onEdit={() => openEditDialog(task)}
+                    onDelete={() => confirmDelete(task.id)}
+                    isUpdating={completingTaskId === task.id}
+                  />
+                ))}
             </div>
           )}
 
@@ -224,15 +237,16 @@ return (
           {completedTasks.length > 0 && (
             <div className="space-y-3">
               <h2 className="text-xl font-semibold">Completed</h2>
-              {completedTasks.map((task) => (
-                <TaskCard
-                  key={task.id}
-                  task={task}
-                  onToggleComplete={() => handleToggleComplete(task)}
-                  onEdit={() => openEditDialog(task)}
-                  onDelete={() => confirmDelete(task.id)}
-                />
-              ))}
+                {completedTasks.map((task) => (
+                  <TaskCard
+                    key={task.id}
+                    task={task}
+                    onToggleComplete={() => handleToggleComplete(task)}
+                    onEdit={() => openEditDialog(task)}
+                    onDelete={() => confirmDelete(task.id)}
+                    isUpdating={completingTaskId === task.id}
+                  />
+                ))}
             </div>
           )}
 
@@ -359,11 +373,13 @@ return (
 }
 
 // Task Card Component
-function TaskCard({ task, onToggleComplete, onEdit, onDelete }: {
+// Task Card Component
+function TaskCard({ task, onToggleComplete, onEdit, onDelete, isUpdating }: {
   task: Task;
   onToggleComplete: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  isUpdating: boolean;
 }) {
   return (
     <Card className={`transition-all ${task.completed ? 'opacity-75' : ''}`}>
@@ -371,9 +387,12 @@ function TaskCard({ task, onToggleComplete, onEdit, onDelete }: {
         <div className="flex items-start gap-3">
           <button
             onClick={onToggleComplete}
-            className="mt-1 flex-shrink-0 hover:scale-110 transition-transform"
+            disabled={isUpdating}
+            className="mt-1 flex-shrink-0 hover:scale-110 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {task.completed ? (
+            {isUpdating ? (
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            ) : task.completed ? (
               <CheckCircle className="h-5 w-5 text-green-500" />
             ) : (
               <Circle className="h-5 w-5 text-muted-foreground" />
@@ -382,6 +401,9 @@ function TaskCard({ task, onToggleComplete, onEdit, onDelete }: {
           <div className="flex-1 min-w-0">
             <h3 className={`font-semibold ${task.completed ? 'line-through text-muted-foreground' : ''}`}>
               {task.title}
+              {isUpdating && (
+                <span className="ml-2 text-xs text-muted-foreground">(updating...)</span>
+              )}
             </h3>
             {task.description && (
               <p className={`text-sm mt-1 ${task.completed ? 'text-muted-foreground line-through' : 'text-muted-foreground'}`}>
