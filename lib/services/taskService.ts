@@ -1,7 +1,10 @@
+export type Priority = 'low' | 'medium' | 'high';
+
 export interface Task {
   id: number;
   title: string;
   description: string | null;
+  priority: number; // 0=low,1=medium,2=high
   completed: boolean;
   createdAt: string;
   updatedAt: string;
@@ -10,12 +13,14 @@ export interface Task {
 export interface CreateTaskInput {
   title: string;
   description?: string;
+  priority?: number;
   completed?: boolean;
 }
 
 export interface UpdateTaskInput {
   title?: string;
   description?: string | null;
+  priority?: number;
   completed?: boolean;
 }
 
@@ -72,3 +77,9 @@ class TaskService {
 }
 
 export const taskService = new TaskService();
+
+export const priorityConfig = {
+  0: { label: 'Low', color: 'bg-green-500', textColor: 'text-green-700', bgLight: 'bg-green-100' },
+  1: { label: 'Medium', color: 'bg-yellow-500', textColor: 'text-yellow-700', bgLight: 'bg-yellow-100' },
+  2: { label: 'High', color: 'bg-red-500', textColor: 'text-red-700', bgLight: 'bg-red-100' },
+};
