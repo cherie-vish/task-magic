@@ -5,8 +5,9 @@ export interface Task {
   id: number;
   title: string;
   description: string | null;
-  priority: number; // 0=low,1=medium,2=high
+  priority: number;
   category: string;
+  dueDate: string | null;
   completed: boolean;
   createdAt: string;
   updatedAt: string;
@@ -17,6 +18,7 @@ export interface CreateTaskInput {
   description?: string;
   priority?: number;
   category?: string;
+  dueDate?: string | null;
   completed?: boolean;
 }
 
@@ -25,6 +27,7 @@ export interface UpdateTaskInput {
   description?: string | null;
   priority?: number;
   category?: string;
+  dueDate?: string | null;
   completed?: boolean;
 }
 
@@ -94,4 +97,16 @@ export const categoryConfig = {
   shopping: { label: 'Shopping', icon: '🛒', color: 'bg-pink-500', bgLight: 'bg-pink-100', textColor: 'text-pink-700' },
   health: { label: 'Health', icon: '💪', color: 'bg-emerald-500', bgLight: 'bg-emerald-100', textColor: 'text-emerald-700' },
   other: { label: 'Other', icon: '📌', color: 'bg-gray-500', bgLight: 'bg-gray-100', textColor: 'text-gray-700' },
+};
+
+export const getDueDateStatus = (dueDate: string | null) => {
+  if (!dueDate) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const due = new Date(dueDate);
+  due.setHours(0, 0, 0, 0);
+  
+  if (due < today) return 'overdue';
+  if (due.getTime() === today.getTime()) return 'today';
+  return 'upcoming';
 };
