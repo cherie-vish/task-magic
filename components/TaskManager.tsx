@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { taskService, Task, CreateTaskInput, priorityConfig, categoryConfig } from '@/lib/services/taskService';
+import { taskService, Task, CreateTaskInput, priorityConfig, categoryConfig, getDueDateStatus } from '@/lib/services/taskService';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -21,10 +21,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Plus, Pencil, Trash2, CheckCircle, Circle, Search, Flag } from 'lucide-react';
+import { Plus, Pencil, Trash2, CheckCircle, Circle, Search, Flag, Calendar as CalendarIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import TaskSkeleton from './TaskSkeleton';
 import CategoryFilter from './CategoryFilter';
+import { DatePicker } from './DatePicker';
 
 export default function TaskManager() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -36,6 +37,7 @@ export default function TaskManager() {
     description: '',
     priority: 1,
     category: 'other',
+    dueDate: null,
   });
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState<number | null>(null);
@@ -101,6 +103,7 @@ export default function TaskManager() {
         description: formData.description,
         priority: formData.priority,
         category: formData.category,
+        dueDate: formData.dueDate,
       });
       setTasks(tasks.map(task => task.id === updatedTask.id ? updatedTask : task));
       setEditingTask(null);
@@ -168,7 +171,7 @@ export default function TaskManager() {
   };
 
   const resetForm = () => {
-    setFormData({ title: '', description: '', priority: 1, category: 'other' });
+    setFormData({ title: '', description: '', priority: 1, category: 'other', dueDate: null });
   };
 
   const openEditDialog = (task: Task) => {
@@ -178,6 +181,7 @@ export default function TaskManager() {
       description: task.description || '',
       priority: task.priority,
       category: task.category,
+      dueDate: task.dueDate,
     });
   };
 
@@ -191,6 +195,9 @@ export default function TaskManager() {
   const sortedTasks = [...filteredTasks].sort((a, b) => {
     if (a.completed !== b.completed) return a.completed ? 1 : -1;
     if (a.priority !== b.priority) return b.priority - a.priority;
+    if (a.dueDate && !b.dueDate) return -1;
+    if (!a.dueDate && b.dueDate) return 1;
+    if (a.dueDate && b.dueDate) return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
 
@@ -212,6 +219,23 @@ export default function TaskManager() {
     return (
       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${config.bgLight} ${config.textColor}`}>
         <span>{config.icon}</span>
+        {config.label}
+      </span>
+    );
+  };
+
+  const DueDateBadge = ({ dueDate }: { dueDate: string | null }) => {
+    if (!dueDate) return null;
+    const status = getDueDateStatus(dueDate);
+    const statusConfig = {
+      overdue: { label: 'Overdue', className: 'bg-red-100 text-red-700' },
+      today: { label: 'Today', className: 'bg-yellow-100 text-yellow-700' },
+      upcoming: { label: 'Upcoming', className: 'bg-green-100 text-green-700' },
+    };
+    const config = statusConfig[status || 'upcoming'];
+    return (
+      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${config.className}`}>
+        <CalendarIcon className="h-3 w-3" />
         {config.label}
       </span>
     );
@@ -267,6 +291,7 @@ export default function TaskManager() {
                   isUpdating={completingTaskId === task.id}
                   PriorityBadge={PriorityBadge}
                   CategoryBadge={CategoryBadge}
+                  DueDateBadge={DueDateBadge}
                 />
               ))}
             </div>
@@ -285,6 +310,7 @@ export default function TaskManager() {
                   isUpdating={completingTaskId === task.id}
                   PriorityBadge={PriorityBadge}
                   CategoryBadge={CategoryBadge}
+                  DueDateBadge={DueDateBadge}
                 />
               ))}
             </div>
@@ -311,7 +337,7 @@ export default function TaskManager() {
 
       {/* Create Task Dialog */}
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Create New Task</DialogTitle>
             <DialogDescription>
@@ -339,10 +365,10 @@ export default function TaskManager() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Priority</label>
-                  <Select
-                    value={String(formData.priority ?? 1)}
-                    onValueChange={(value) => setFormData({ ...formData, priority: parseInt(value as string) })}
-                  >
+                <Select
+                  value={String(formData.priority ?? 1)}
+                  onValueChange={(value) => setFormData({ ...formData, priority: parseInt(value as string) })}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select priority" />
                   </SelectTrigger>
@@ -355,10 +381,10 @@ export default function TaskManager() {
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Category</label>
-                  <Select
-                    value={formData.category ?? 'other'}
-                    onValueChange={(value) => setFormData({ ...formData, category: value as string })}
-                  >
+                <Select
+                  value={formData.category ?? 'other'}
+                  onValueChange={(value) => setFormData({ ...formData, category: value as string })}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select category" />
                   </SelectTrigger>
@@ -371,6 +397,14 @@ export default function TaskManager() {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Due Date</label>
+              <DatePicker
+                date={formData.dueDate ? new Date(formData.dueDate) : null}
+                onSelect={(date) => setFormData({ ...formData, dueDate: date ? date.toISOString() : null })}
+                placeholder="No due date"
+              />
             </div>
           </div>
           <DialogFooter>
@@ -385,7 +419,7 @@ export default function TaskManager() {
       {/* Edit Dialog */}
       {editingTask && (
         <Dialog open={!!editingTask} onOpenChange={() => setEditingTask(null)}>
-          <DialogContent>
+          <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>Edit Task</DialogTitle>
               <DialogDescription>
@@ -413,10 +447,10 @@ export default function TaskManager() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Priority</label>
-                    <Select
-                      value={String(formData.priority ?? 1)}
-                      onValueChange={(value) => setFormData({ ...formData, priority: parseInt(value as string) })}
-                    >
+                  <Select
+                    value={String(formData.priority ?? 1)}
+                    onValueChange={(value) => setFormData({ ...formData, priority: parseInt(value as string) })}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Select priority" />
                     </SelectTrigger>
@@ -429,10 +463,10 @@ export default function TaskManager() {
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Category</label>
-                    <Select
-                      value={formData.category ?? 'other'}
-                      onValueChange={(value) => setFormData({ ...formData, category: value as string })}
-                    >
+                  <Select
+                    value={formData.category ?? 'other'}
+                    onValueChange={(value) => setFormData({ ...formData, category: value as string })}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Select category" />
                     </SelectTrigger>
@@ -445,6 +479,14 @@ export default function TaskManager() {
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Due Date</label>
+                <DatePicker
+                  date={formData.dueDate ? new Date(formData.dueDate) : null}
+                  onSelect={(date) => setFormData({ ...formData, dueDate: date ? date.toISOString() : null })}
+                  placeholder="No due date"
+                />
               </div>
             </div>
             <DialogFooter>
@@ -481,7 +523,7 @@ export default function TaskManager() {
 }
 
 // Task Card Component
-function TaskCard({ task, onToggleComplete, onEdit, onDelete, isUpdating, PriorityBadge, CategoryBadge }: {
+function TaskCard({ task, onToggleComplete, onEdit, onDelete, isUpdating, PriorityBadge, CategoryBadge, DueDateBadge }: {
   task: Task;
   onToggleComplete: () => void;
   onEdit: () => void;
@@ -489,6 +531,7 @@ function TaskCard({ task, onToggleComplete, onEdit, onDelete, isUpdating, Priori
   isUpdating: boolean;
   PriorityBadge: React.ComponentType<{ priority: number }>;
   CategoryBadge: React.ComponentType<{ category: string }>;
+  DueDateBadge: React.ComponentType<{ dueDate: string | null }>;
 }) {
   return (
     <Card className={`transition-all ${task.completed ? 'opacity-75' : ''}`}>
@@ -514,6 +557,7 @@ function TaskCard({ task, onToggleComplete, onEdit, onDelete, isUpdating, Priori
               </h3>
               <PriorityBadge priority={task.priority} />
               <CategoryBadge category={task.category} />
+              <DueDateBadge dueDate={task.dueDate} />
               {isUpdating && (
                 <span className="text-xs text-muted-foreground">(updating...)</span>
               )}
@@ -523,7 +567,12 @@ function TaskCard({ task, onToggleComplete, onEdit, onDelete, isUpdating, Priori
                 {task.description}
               </p>
             )}
-            <p className="text-xs text-muted-foreground mt-2">
+            {task.dueDate && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Due: {new Date(task.dueDate).toLocaleDateString()}
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground mt-1">
               Created: {new Date(task.createdAt).toLocaleDateString()}
             </p>
           </div>
