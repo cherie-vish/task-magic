@@ -1,4 +1,4 @@
-'use client';
+'use client'
 
 import { useState, useEffect } from 'react';
 import { taskService, Task, CreateTaskInput } from '@/lib/services/taskService';
@@ -150,14 +150,12 @@ export default function TaskManager() {
             {tasks.length} task{tasks.length !== 1 ? 's' : ''} total
           </p>
         </div>
+        <Button onClick={() => setIsCreateDialogOpen(true)}>
+          <Plus className="mr-2 h-4 w-4" />
+          New Task
+        </Button>
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              New Task
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
+        <DialogContent>
             <DialogHeader>
               <DialogTitle>Create New Task</DialogTitle>
               <DialogDescription>
