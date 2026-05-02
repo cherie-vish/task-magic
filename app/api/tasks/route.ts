@@ -1,20 +1,19 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { tasks } from '@/lib/db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 import { z } from 'zod';
 
-// Validation schema for creating a task
 const createTaskSchema = z.object({
   title: z.string().min(1, 'Title is required').max(255),
   description: z.string().optional(),
+  priority: z.number().min(0).max(2).default(1),
   completed: z.boolean().optional(),
 });
 
-// GET: Fetch all tasks
 export async function GET() {
   try {
-    const allTasks = await db.select().from(tasks).orderBy(tasks.createdAt);
+    const allTasks = await db.select().from(tasks).orderBy(desc(tasks.createdAt));
     return NextResponse.json(allTasks);
   } catch (error) {
     console.error('Failed to fetch tasks:', error);
@@ -25,7 +24,6 @@ export async function GET() {
   }
 }
 
-// POST: Create a new task
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -34,6 +32,7 @@ export async function POST(request: Request) {
     const newTask = await db.insert(tasks).values({
       title: validatedData.title,
       description: validatedData.description || null,
+      priority: validatedData.priority,
       completed: validatedData.completed || false,
     }).returning();
     

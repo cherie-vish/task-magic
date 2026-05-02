@@ -7,10 +7,10 @@ import { z } from 'zod';
 const updateTaskSchema = z.object({
   title: z.string().min(1).max(255).optional(),
   description: z.string().optional().nullable(),
+  priority: z.number().min(0).max(2).optional(),
   completed: z.boolean().optional(),
 });
 
-// GET: Fetch single task
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -35,7 +35,6 @@ export async function GET(
   }
 }
 
-// PUT: Update a task
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -74,7 +73,6 @@ export async function PUT(
   }
 }
 
-// DELETE: Remove a task
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
