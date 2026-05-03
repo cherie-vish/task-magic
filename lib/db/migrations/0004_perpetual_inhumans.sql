@@ -1,0 +1,1 @@
+ALTER TABLE "tasks" ADD COLUMN "order" real DEFAULT 0 NOT NULL;
