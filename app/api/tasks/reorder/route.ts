@@ -6,14 +6,14 @@ import { z } from 'zod';
 
 const reorderSchema = z.object({
   taskIds: z.array(z.number()),
-  completed: z.boolean(),
 });
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { taskIds, completed } = reorderSchema.parse(body);
+    const { taskIds } = reorderSchema.parse(body);
 
+    // Update order for each task
     const updates = taskIds.map((id, index) =>
       db.update(tasks)
         .set({ order: index })

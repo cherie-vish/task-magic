@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { SortableTaskContainer } from './SortableTaskContainer';
 import {
   Select,
   SelectContent,
@@ -22,11 +21,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Plus, Pencil, Trash2, CheckCircle, Circle, Search, Flag, Calendar as CalendarIcon } from 'lucide-react';
+import { Plus, Pencil, Trash2, CheckCircle, Circle, Search, Flag } from 'lucide-react';
 import { toast } from 'sonner';
 import TaskSkeleton from './TaskSkeleton';
 import CategoryFilter from './CategoryFilter';
 import { DatePicker } from './DatePicker';
+import { SortableTaskContainer } from './SortableTaskContainer';
 
 export default function TaskManager() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -57,9 +57,7 @@ export default function TaskManager() {
       setTasks(data);
     } catch (error) {
       console.error('Failed to load tasks:', error);
-      toast.error('Failed to load tasks', {
-        description: 'Please refresh the page and try again.',
-      });
+      toast.error('Failed to load tasks');
     } finally {
       setLoading(false);
     }
@@ -67,37 +65,26 @@ export default function TaskManager() {
 
   const handleCreateTask = async () => {
     if (!formData.title.trim()) {
-      toast.warning('Task title is required', {
-        description: 'Please enter a title for your task.',
-      });
+      toast.warning('Task title is required');
       return;
     }
-
     try {
       const newTask = await taskService.createTask(formData);
       setTasks([newTask, ...tasks]);
       setIsCreateDialogOpen(false);
       resetForm();
-      toast.success('Task created successfully', {
-        description: `"${formData.title}" has been added.`,
-      });
+      toast.success('Task created successfully');
     } catch (error) {
-      console.error('Failed to create task:', error);
-      toast.error('Failed to create task', {
-        description: 'Please try again.',
-      });
+      toast.error('Failed to create task');
     }
   };
 
   const handleUpdateTask = async () => {
     if (!editingTask) return;
     if (!formData.title?.trim()) {
-      toast.warning('Task title is required', {
-        description: 'Please enter a title for your task.',
-      });
+      toast.warning('Task title is required');
       return;
     }
-
     try {
       const updatedTask = await taskService.updateTask(editingTask.id, {
         title: formData.title,
@@ -109,38 +96,22 @@ export default function TaskManager() {
       setTasks(tasks.map(task => task.id === updatedTask.id ? updatedTask : task));
       setEditingTask(null);
       resetForm();
-      toast.success('Task updated successfully', {
-        description: `"${updatedTask.title}" has been updated.`,
-      });
+      toast.success('Task updated successfully');
     } catch (error) {
-      console.error('Failed to update task:', error);
-      toast.error('Failed to update task', {
-        description: 'Please try again.',
-      });
+      toast.error('Failed to update task');
     }
   };
 
   const handleToggleComplete = async (task: Task) => {
     setCompletingTaskId(task.id);
-    
     try {
       const updatedTask = await taskService.updateTask(task.id, {
         completed: !task.completed,
       });
-      
       setTasks(tasks.map(t => t.id === updatedTask.id ? updatedTask : t));
-      
-      toast.success(
-        !task.completed ? 'Task completed! 🎉' : 'Task marked as incomplete',
-        {
-          description: `"${updatedTask.title}"`,
-        }
-      );
+      toast.success(!task.completed ? 'Task completed! 🎉' : 'Task marked incomplete');
     } catch (error) {
-      console.error('Failed to update task status:', error);
-      toast.error('Failed to update task status', {
-        description: 'Please try again.',
-      });
+      toast.error('Failed to update');
     } finally {
       setCompletingTaskId(null);
     }
@@ -153,18 +124,12 @@ export default function TaskManager() {
 
   const handleConfirmedDelete = async () => {
     if (!taskToDelete) return;
-    
     try {
       await taskService.deleteTask(taskToDelete);
       setTasks(tasks.filter(task => task.id !== taskToDelete));
-      toast.success('Task deleted successfully', {
-        description: 'The task has been removed.',
-      });
+      toast.success('Task deleted');
     } catch (error) {
-      console.error('Failed to delete task:', error);
-      toast.error('Failed to delete task', {
-        description: 'Please try again.',
-      });
+      toast.error('Failed to delete');
     } finally {
       setDeleteDialogOpen(false);
       setTaskToDelete(null);
@@ -186,6 +151,44 @@ export default function TaskManager() {
     });
   };
 
+  // FIXED: Reorder with local order update - NO REFRESH NEEDED
+  const handleReorderTasks = async (taskIds: number[]) => {
+    // Get the tasks being reordered
+    const reorderedTasksData = taskIds.map(id => tasks.find(t => t.id === id)!);
+    
+    // Update local order values immediately (0, 1, 2, 3...)
+    const updatedTasks = tasks.map(task => {
+      const newIndex = taskIds.indexOf(task.id);
+      if (newIndex !== -1) {
+        return { ...task, order: newIndex };
+      }
+      return task;
+    });
+    
+    // Update UI instantly with new order values
+    setTasks(updatedTasks);
+    
+    // Send to server in background
+    try {
+      const response = await fetch('/api/tasks/reorder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskIds }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Reorder failed');
+      }
+    } catch (error) {
+      console.error('Failed to save order:', error);
+      toast.error('Failed to save order');
+      // Reload to restore original order
+      const freshTasks = await taskService.getAllTasks();
+      setTasks(freshTasks);
+    }
+  };
+
+  // Filter tasks
   const filteredTasks = tasks.filter(task => {
     const matchesSearch = task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (task.description && task.description.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -193,13 +196,10 @@ export default function TaskManager() {
     return matchesSearch && matchesCategory;
   });
 
+  // Sort by order field (now updated instantly by handleReorderTasks)
   const sortedTasks = [...filteredTasks].sort((a, b) => {
     if (a.completed !== b.completed) return a.completed ? 1 : -1;
-    if (a.priority !== b.priority) return b.priority - a.priority;
-    if (a.dueDate && !b.dueDate) return -1;
-    if (!a.dueDate && b.dueDate) return 1;
-    if (a.dueDate && b.dueDate) return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    return (a.order || 0) - (b.order || 0);
   });
 
   const incompleteTasks = sortedTasks.filter(t => !t.completed);
@@ -228,38 +228,16 @@ export default function TaskManager() {
   const DueDateBadge = ({ dueDate }: { dueDate: string | null }) => {
     if (!dueDate) return null;
     const status = getDueDateStatus(dueDate);
-    const statusConfig = {
+    const config = {
       overdue: { label: 'Overdue', className: 'bg-red-100 text-red-700' },
       today: { label: 'Today', className: 'bg-yellow-100 text-yellow-700' },
       upcoming: { label: 'Upcoming', className: 'bg-green-100 text-green-700' },
-    };
-    const config = statusConfig[status || 'upcoming'];
+    }[status || 'upcoming'];
     return (
       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${config.className}`}>
-        <CalendarIcon className="h-3 w-3" />
         {config.label}
       </span>
     );
-  };
-
-  const handleReorderTasks = async (taskIds: number[], completed: boolean) => {
-    try {
-      await fetch('/api/tasks/reorder', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ taskIds, completed }),
-      });
-      
-      // Update local state with new order
-      const updatedTasks = [...tasks];
-      const taskMap = new Map(updatedTasks.map(t => [t.id, t]));
-      const reorderedTasks = taskIds.map(id => taskMap.get(id)!);
-      const otherTasks = updatedTasks.filter(t => !taskIds.includes(t.id));
-      setTasks([...reorderedTasks, ...otherTasks]);
-    } catch (error) {
-      console.error('Failed to reorder tasks:', error);
-      toast.error('Failed to save order');
-    }
   };
 
   return (
@@ -273,40 +251,38 @@ export default function TaskManager() {
             {loading && 'Loading tasks...'}
           </p>
         </div>
-        <Button onClick={() => setIsCreateDialogOpen(true)} disabled={loading}>
-          <Plus className="mr-2 h-4 w-4" />
-          New Task
-        </Button>
+        <div className="flex gap-2 w-full sm:w-auto">
+          <div className="relative flex-1 sm:w-64">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search tasks..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-9 w-full"
+              disabled={loading}
+            />
+          </div>
+          <Button onClick={() => setIsCreateDialogOpen(true)} disabled={loading}>
+            <Plus className="mr-2 h-4 w-4" />
+            New Task
+          </Button>
+        </div>
       </div>
 
-      {/* Filters */}
-      <div className="space-y-4">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search tasks..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-9 w-full"
-            disabled={loading}
-          />
-        </div>
-        <CategoryFilter selectedCategory={selectedCategory} onCategoryChange={setSelectedCategory} />
-      </div>
+      {/* Category Filter */}
+      <CategoryFilter selectedCategory={selectedCategory} onCategoryChange={setSelectedCategory} />
 
       {/* Task List Area */}
       {loading ? (
         <TaskSkeleton />
       ) : (
         <>
-
-          {/* Incomplete Tasks - Drag and Drop */}
           {incompleteTasks.length > 0 && (
             <div className="space-y-3">
               <h2 className="text-xl font-semibold">To Do</h2>
               <SortableTaskContainer
                 tasks={incompleteTasks}
-                onReorder={(taskIds) => handleReorderTasks(taskIds, false)}
+                onReorder={handleReorderTasks}
                 onToggleComplete={handleToggleComplete}
                 onEdit={openEditDialog}
                 onDelete={confirmDelete}
@@ -315,13 +291,12 @@ export default function TaskManager() {
             </div>
           )}
 
-          {/* Completed Tasks - Drag and Drop */}
           {completedTasks.length > 0 && (
             <div className="space-y-3">
               <h2 className="text-xl font-semibold">Completed</h2>
               <SortableTaskContainer
                 tasks={completedTasks}
-                onReorder={(taskIds) => handleReorderTasks(taskIds, true)}
+                onReorder={handleReorderTasks}
                 onToggleComplete={handleToggleComplete}
                 onEdit={openEditDialog}
                 onDelete={confirmDelete}
@@ -354,9 +329,7 @@ export default function TaskManager() {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Create New Task</DialogTitle>
-            <DialogDescription>
-              Add a new task to your list. Click save when you're done.
-            </DialogDescription>
+            <DialogDescription>Add a new task to your list.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
@@ -422,9 +395,7 @@ export default function TaskManager() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
-              Cancel
-            </Button>
+            <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>Cancel</Button>
             <Button onClick={handleCreateTask}>Create Task</Button>
           </DialogFooter>
         </DialogContent>
@@ -436,15 +407,12 @@ export default function TaskManager() {
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>Edit Task</DialogTitle>
-              <DialogDescription>
-                Update your task details below.
-              </DialogDescription>
+              <DialogDescription>Update your task details.</DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Title *</label>
                 <Input
-                  placeholder="Enter task title"
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                 />
@@ -452,7 +420,6 @@ export default function TaskManager() {
               <div className="space-y-2">
                 <label className="text-sm font-medium">Description</label>
                 <Textarea
-                  placeholder="Enter task description (optional)"
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   rows={3}
@@ -466,7 +433,7 @@ export default function TaskManager() {
                     onValueChange={(value) => setFormData({ ...formData, priority: parseInt(value as string) })}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select priority" />
+                      <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="0">Low</SelectItem>
@@ -482,7 +449,7 @@ export default function TaskManager() {
                     onValueChange={(value) => setFormData({ ...formData, category: value as string })}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select category" />
+                      <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="work">💼 Work</SelectItem>
@@ -504,9 +471,7 @@ export default function TaskManager() {
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setEditingTask(null)}>
-                Cancel
-              </Button>
+              <Button variant="outline" onClick={() => setEditingTask(null)}>Cancel</Button>
               <Button onClick={handleUpdateTask}>Save Changes</Button>
             </DialogFooter>
           </DialogContent>
@@ -515,91 +480,17 @@ export default function TaskManager() {
 
       {/* Delete Dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete Task?</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete this task? This action cannot be undone.
-            </DialogDescription>
+            <DialogDescription>This action cannot be undone.</DialogDescription>
           </DialogHeader>
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={handleConfirmedDelete}>
-              Delete Task
-            </Button>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleConfirmedDelete}>Delete</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
-  );
-}
-
-// Task Card Component
-function TaskCard({ task, onToggleComplete, onEdit, onDelete, isUpdating, PriorityBadge, CategoryBadge, DueDateBadge }: {
-  task: Task;
-  onToggleComplete: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
-  isUpdating: boolean;
-  PriorityBadge: React.ComponentType<{ priority: number }>;
-  CategoryBadge: React.ComponentType<{ category: string }>;
-  DueDateBadge: React.ComponentType<{ dueDate: string | null }>;
-}) {
-  return (
-    <Card className={`transition-all ${task.completed ? 'opacity-75' : ''}`}>
-      <CardContent className="p-4">
-        <div className="flex items-start gap-3">
-          <button
-            onClick={onToggleComplete}
-            disabled={isUpdating}
-            className="mt-1 flex-shrink-0 hover:scale-110 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isUpdating ? (
-              <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-            ) : task.completed ? (
-              <CheckCircle className="h-5 w-5 text-green-500" />
-            ) : (
-              <Circle className="h-5 w-5 text-muted-foreground" />
-            )}
-          </button>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h3 className={`font-semibold ${task.completed ? 'line-through text-muted-foreground' : ''}`}>
-                {task.title}
-              </h3>
-              <PriorityBadge priority={task.priority} />
-              <CategoryBadge category={task.category} />
-              <DueDateBadge dueDate={task.dueDate} />
-              {isUpdating && (
-                <span className="text-xs text-muted-foreground">(updating...)</span>
-              )}
-            </div>
-            {task.description && (
-              <p className={`text-sm mt-1 ${task.completed ? 'text-muted-foreground line-through' : 'text-muted-foreground'}`}>
-                {task.description}
-              </p>
-            )}
-            {task.dueDate && (
-              <p className="text-xs text-muted-foreground mt-1">
-                Due: {new Date(task.dueDate).toLocaleDateString()}
-              </p>
-            )}
-            <p className="text-xs text-muted-foreground mt-1">
-              Created: {new Date(task.createdAt).toLocaleDateString()}
-            </p>
-          </div>
-          <div className="flex gap-2 flex-shrink-0">
-            <Button variant="ghost" size="sm" onClick={onEdit}>
-              <Pencil className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="sm" onClick={onDelete}>
-              <Trash2 className="h-4 w-4 text-destructive" />
-            </Button>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
   );
 }

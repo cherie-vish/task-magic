@@ -21,7 +21,7 @@ import { Task } from '@/lib/services/taskService';
 
 interface SortableTaskContainerProps {
   tasks: Task[];
-  onReorder: (taskIds: number[]) => Promise<void>;
+  onReorder: (taskIds: number[]) => void;
   onToggleComplete: (task: Task) => void;
   onEdit: (task: Task) => void;
   onDelete: (id: number) => void;
@@ -37,7 +37,11 @@ export function SortableTaskContainer({
   isUpdatingId,
 }: SortableTaskContainerProps) {
   const sensors = useSensors(
-    useSensor(PointerSensor),
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5,
+      },
+    }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     })
@@ -46,11 +50,13 @@ export function SortableTaskContainer({
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
 
-    if (active.id !== over?.id) {
+    if (active.id !== over?.id && over) {
       const oldIndex = tasks.findIndex((t) => t.id === active.id);
-      const newIndex = tasks.findIndex((t) => t.id === over?.id);
+      const newIndex = tasks.findIndex((t) => t.id === over.id);
       const newOrder = arrayMove(tasks, oldIndex, newIndex);
       const taskIds = newOrder.map((t) => t.id);
+      
+      // Call parent handler immediately
       onReorder(taskIds);
     }
   };
@@ -64,7 +70,10 @@ export function SortableTaskContainer({
       onDragEnd={handleDragEnd}
       modifiers={[restrictToVerticalAxis]}
     >
-      <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
+      <SortableContext 
+        items={tasks.map((t) => t.id)} 
+        strategy={verticalListSortingStrategy}
+      >
         <div className="space-y-3">
           {tasks.map((task) => (
             <SortableTaskCard

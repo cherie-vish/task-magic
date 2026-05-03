@@ -5,8 +5,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { CheckCircle, Circle, Pencil, Trash2, GripVertical, Flag } from 'lucide-react';
-import { priorityConfig, categoryConfig, getDueDateStatus } from '@/lib/services/taskService';
-import { Task } from '@/lib/services/taskService';
+import { priorityConfig, categoryConfig, getDueDateStatus, Task } from '@/lib/services/taskService';
 
 interface SortableTaskCardProps {
   task: Task;
