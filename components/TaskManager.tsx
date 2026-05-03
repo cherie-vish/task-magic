@@ -1,7 +1,3 @@
-
-
-
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -10,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { SortableTaskContainer } from './SortableTaskContainer';
 import {
   Select,
   SelectContent,
@@ -245,6 +242,26 @@ export default function TaskManager() {
     );
   };
 
+  const handleReorderTasks = async (taskIds: number[], completed: boolean) => {
+    try {
+      await fetch('/api/tasks/reorder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskIds, completed }),
+      });
+      
+      // Update local state with new order
+      const updatedTasks = [...tasks];
+      const taskMap = new Map(updatedTasks.map(t => [t.id, t]));
+      const reorderedTasks = taskIds.map(id => taskMap.get(id)!);
+      const otherTasks = updatedTasks.filter(t => !taskIds.includes(t.id));
+      setTasks([...reorderedTasks, ...otherTasks]);
+    } catch (error) {
+      console.error('Failed to reorder tasks:', error);
+      toast.error('Failed to save order');
+    }
+  };
+
   return (
     <div className="container max-w-4xl mx-auto p-4 sm:p-6 space-y-6">
       {/* Header */}
@@ -282,41 +299,34 @@ export default function TaskManager() {
         <TaskSkeleton />
       ) : (
         <>
+
+          {/* Incomplete Tasks - Drag and Drop */}
           {incompleteTasks.length > 0 && (
             <div className="space-y-3">
               <h2 className="text-xl font-semibold">To Do</h2>
-              {incompleteTasks.map((task) => (
-                <TaskCard
-                  key={task.id}
-                  task={task}
-                  onToggleComplete={() => handleToggleComplete(task)}
-                  onEdit={() => openEditDialog(task)}
-                  onDelete={() => confirmDelete(task.id)}
-                  isUpdating={completingTaskId === task.id}
-                  PriorityBadge={PriorityBadge}
-                  CategoryBadge={CategoryBadge}
-                  DueDateBadge={DueDateBadge}
-                />
-              ))}
+              <SortableTaskContainer
+                tasks={incompleteTasks}
+                onReorder={(taskIds) => handleReorderTasks(taskIds, false)}
+                onToggleComplete={handleToggleComplete}
+                onEdit={openEditDialog}
+                onDelete={confirmDelete}
+                isUpdatingId={completingTaskId}
+              />
             </div>
           )}
 
+          {/* Completed Tasks - Drag and Drop */}
           {completedTasks.length > 0 && (
             <div className="space-y-3">
               <h2 className="text-xl font-semibold">Completed</h2>
-              {completedTasks.map((task) => (
-                <TaskCard
-                  key={task.id}
-                  task={task}
-                  onToggleComplete={() => handleToggleComplete(task)}
-                  onEdit={() => openEditDialog(task)}
-                  onDelete={() => confirmDelete(task.id)}
-                  isUpdating={completingTaskId === task.id}
-                  PriorityBadge={PriorityBadge}
-                  CategoryBadge={CategoryBadge}
-                  DueDateBadge={DueDateBadge}
-                />
-              ))}
+              <SortableTaskContainer
+                tasks={completedTasks}
+                onReorder={(taskIds) => handleReorderTasks(taskIds, true)}
+                onToggleComplete={handleToggleComplete}
+                onEdit={openEditDialog}
+                onDelete={confirmDelete}
+                isUpdatingId={completingTaskId}
+              />
             </div>
           )}
 

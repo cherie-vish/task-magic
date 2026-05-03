@@ -8,7 +8,7 @@ export const tasks = pgTable('tasks', {
   category: text('category').default('other').notNull(),
   dueDate: timestamp('due_date'),
   completed: boolean('completed').default(false).notNull(),
-  order: real('order').default(0).notNull(), // NEW: for drag and drop
+  order: real('order').default(0).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
