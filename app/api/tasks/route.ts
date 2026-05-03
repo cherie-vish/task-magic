@@ -30,7 +30,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const validatedData = createTaskSchema.parse(body);
-    
+
     const newTask = await db.insert(tasks).values({
       title: validatedData.title,
       description: validatedData.description || null,
@@ -39,7 +39,7 @@ export async function POST(request: Request) {
       dueDate: validatedData.dueDate ? new Date(validatedData.dueDate) : null,
       completed: validatedData.completed || false,
     }).returning();
-    
+
     return NextResponse.json(newTask[0], { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) {

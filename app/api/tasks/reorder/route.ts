@@ -14,7 +14,6 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { taskIds, completed } = reorderSchema.parse(body);
 
-    // Update order for each task in the list
     const updates = taskIds.map((id, index) =>
       db.update(tasks)
         .set({ order: index })
