@@ -9,6 +9,7 @@ export interface Task {
   category: string;
   dueDate: string | null;
   completed: boolean;
+  order: number;  // For drag and drop sorting
   createdAt: string;
   updatedAt: string;
 }
@@ -30,6 +31,7 @@ export interface UpdateTaskInput {
   dueDate?: string | null;
   completed?: boolean;
 }
+
 
 class TaskService {
   private baseUrl = '/api/tasks';
