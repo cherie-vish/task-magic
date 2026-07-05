@@ -26,6 +26,7 @@ interface SortableTaskContainerProps {
   onEdit: (task: Task) => void;
   onDelete: (id: number) => void;
   isUpdatingId: number | null;
+  viewMode?: 'list' | 'grid';  // Add viewMode prop
 }
 
 export function SortableTaskContainer({
@@ -35,6 +36,7 @@ export function SortableTaskContainer({
   onEdit,
   onDelete,
   isUpdatingId,
+  viewMode = 'list',  // Default to list
 }: SortableTaskContainerProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -55,14 +57,31 @@ export function SortableTaskContainer({
       const newIndex = tasks.findIndex((t) => t.id === over.id);
       const newOrder = arrayMove(tasks, oldIndex, newIndex);
       const taskIds = newOrder.map((t) => t.id);
-      
-      // Call parent handler immediately
       onReorder(taskIds);
     }
   };
 
   if (tasks.length === 0) return null;
 
+  // Grid view - no drag and drop (or you can keep it with different styling)
+  if (viewMode === 'grid') {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {tasks.map((task) => (
+          <SortableTaskCard
+            key={task.id}
+            task={task}
+            onToggleComplete={() => onToggleComplete(task)}
+            onEdit={() => onEdit(task)}
+            onDelete={() => onDelete(task.id)}
+            isUpdating={isUpdatingId === task.id}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  // List view - with drag and drop
   return (
     <DndContext
       sensors={sensors}

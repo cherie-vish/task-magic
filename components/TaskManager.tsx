@@ -21,12 +21,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Plus, Pencil, Trash2, CheckCircle, Circle, Search, Flag, Calendar as CalendarIcon, Sparkles, LayoutGrid, List, TrendingUp, Clock } from 'lucide-react';
+import { Plus, Pencil, Trash2, CheckCircle, Circle, Search, Flag, Sparkles, LayoutGrid, List, TrendingUp, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import TaskSkeleton from './TaskSkeleton';
 import CategoryFilter from './CategoryFilter';
 import { DatePicker } from './DatePicker';
-import { motion, AnimatePresence } from 'framer-motion';
+import { SortableTaskContainer } from './SortableTaskContainer';
+import { motion } from 'framer-motion';
 
 export default function TaskManager() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -57,6 +58,7 @@ export default function TaskManager() {
       const data = await taskService.getAllTasks();
       setTasks(data);
     } catch (error) {
+      console.error('Failed to load tasks:', error);
       toast.error('Failed to load tasks');
     } finally {
       setLoading(false);
@@ -151,6 +153,33 @@ export default function TaskManager() {
     });
   };
 
+  // DND Handler - Instant reorder with local update
+  const handleReorderTasks = async (taskIds: number[]) => {
+    // Update local order values immediately
+    const updatedTasks = tasks.map(task => {
+      const newIndex = taskIds.indexOf(task.id);
+      if (newIndex !== -1) {
+        return { ...task, order: newIndex };
+      }
+      return task;
+    });
+    
+    setTasks(updatedTasks);
+    
+    try {
+      await fetch('/api/tasks/reorder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskIds }),
+      });
+    } catch (error) {
+      console.error('Failed to save order:', error);
+      toast.error('Failed to save order');
+      const freshTasks = await taskService.getAllTasks();
+      setTasks(freshTasks);
+    }
+  };
+
   const filteredTasks = tasks.filter(task => {
     const matchesSearch = task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (task.description && task.description.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -160,11 +189,7 @@ export default function TaskManager() {
 
   const sortedTasks = [...filteredTasks].sort((a, b) => {
     if (a.completed !== b.completed) return a.completed ? 1 : -1;
-    if (a.priority !== b.priority) return b.priority - a.priority;
-    if (a.dueDate && !b.dueDate) return -1;
-    if (!a.dueDate && b.dueDate) return 1;
-    if (a.dueDate && b.dueDate) return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    return (a.order || 0) - (b.order || 0);
   });
 
   const incompleteTasks = sortedTasks.filter(t => !t.completed);
@@ -180,9 +205,9 @@ export default function TaskManager() {
   const PriorityBadge = ({ priority }: { priority: number }) => {
     const config = priorityConfig[priority as keyof typeof priorityConfig];
     return (
-      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${config.bgLight} ${config.textColor}`}>
+      <span className={`glass-badge ${config.textColor}`}>
         <Flag className="h-3 w-3" />
-        <span>{config.label}</span>
+        {config.label}
       </span>
     );
   };
@@ -190,9 +215,9 @@ export default function TaskManager() {
   const CategoryBadge = ({ category }: { category: string }) => {
     const config = categoryConfig[category as keyof typeof categoryConfig];
     return (
-      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${config.bgLight} ${config.textColor}`}>
-        <span className="text-sm">{config.icon}</span>
-        <span>{config.label}</span>
+      <span className={`glass-badge ${config.textColor}`}>
+        <span>{config.icon}</span>
+        {config.label}
       </span>
     );
   };
@@ -201,14 +226,14 @@ export default function TaskManager() {
     if (!dueDate) return null;
     const status = getDueDateStatus(dueDate);
     const config = {
-      overdue: { label: 'Overdue', className: 'bg-red-100 text-red-700' },
-      today: { label: 'Today', className: 'bg-yellow-100 text-yellow-700' },
-      upcoming: { label: 'Upcoming', className: 'bg-green-100 text-green-700' },
+      overdue: { label: 'Overdue', className: 'text-red-500' },
+      today: { label: 'Today', className: 'text-yellow-500' },
+      upcoming: { label: 'Upcoming', className: 'text-emerald-500' },
     }[status || 'upcoming'];
     return (
-      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${config.className}`}>
+      <span className={`glass-badge ${config.className}`}>
         <Clock className="h-3 w-3" />
-        <span>{config.label}</span>
+        {config.label}
       </span>
     );
   };
@@ -299,111 +324,83 @@ export default function TaskManager() {
           </div>
         </div>
 
-        {/* Task Sections - Fixed AnimatePresence */}
-        {loading ? (
-          <TaskSkeleton />
-        ) : (
-          <>
-            {/* Incomplete Tasks Section */}
-            {incompleteTasks.length > 0 && (
-              <motion.div
-                key="incomplete-section"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="mb-8"
-              >
-                <h2 className="text-xl font-semibold text-gray-700 mb-4 flex items-center gap-2">
-                  <span className="w-3 h-3 rounded-full bg-gradient-to-r from-purple-500 to-pink-500"></span>
-                  To Do
-                  <span className="text-sm text-gray-400 ml-2">({incompleteTasks.length})</span>
-                </h2>
-                <div className={viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 gap-4' : 'space-y-3'}>
-                  {incompleteTasks.map((task, idx) => (
-                    <motion.div
-                      key={task.id}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: idx * 0.05 }}
-                    >
-                      <GlassTaskCard
-                        task={task}
-                        onToggleComplete={() => handleToggleComplete(task)}
-                        onEdit={() => openEditDialog(task)}
-                        onDelete={() => confirmDelete(task.id)}
-                        isUpdating={completingTaskId === task.id}
-                        PriorityBadge={PriorityBadge}
-                        CategoryBadge={CategoryBadge}
-                        DueDateBadge={DueDateBadge}
-                        viewMode={viewMode}
-                      />
-                    </motion.div>
-                  ))}
-                </div>
-              </motion.div>
-            )}
-
-            {/* Completed Tasks Section */}
-            {completedTasks.length > 0 && (
-              <motion.div
-                key="completed-section"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-              >
-                <h2 className="text-xl font-semibold text-gray-700 mb-4 flex items-center gap-2">
-                  <span className="w-3 h-3 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500"></span>
-                  Completed
-                  <span className="text-sm text-gray-400 ml-2">({completedTasks.length})</span>
-                </h2>
-                <div className={viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 gap-4' : 'space-y-3'}>
-                  {completedTasks.map((task) => (
-                    <motion.div
-                      key={task.id}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                    >
-                      <GlassTaskCard
-                        task={task}
-                        onToggleComplete={() => handleToggleComplete(task)}
-                        onEdit={() => openEditDialog(task)}
-                        onDelete={() => confirmDelete(task.id)}
-                        isUpdating={completingTaskId === task.id}
-                        PriorityBadge={PriorityBadge}
-                        CategoryBadge={CategoryBadge}
-                        DueDateBadge={DueDateBadge}
-                        viewMode={viewMode}
-                      />
-                    </motion.div>
-                  ))}
-                </div>
-              </motion.div>
-            )}
-
-            {/* Empty State */}
-            {filteredTasks.length === 0 && (
-              <motion.div
-                key="empty-state"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="text-center py-20"
-              >
-                <div className="rounded-3xl p-12 backdrop-blur-xl bg-white/30 border border-white/20">
-                  <Sparkles className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                  <p className="text-gray-500 text-lg">No tasks found</p>
-                  <Button
-                    variant="link"
-                    onClick={() => { setSearchTerm(''); setSelectedCategory('all'); }}
-                    className="mt-2"
-                  >
-                    Clear filters
-                  </Button>
-                </div>
-              </motion.div>
-            )}
-          </>
+    {/* Task Sections */}
+    {loading ? (
+      <TaskSkeleton />
+    ) : (
+      <>
+        {incompleteTasks.length > 0 && (
+          <motion.div
+            key="incomplete-section"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-8"
+          >
+            <h2 className="text-xl font-semibold text-gray-700 mb-4 flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-gradient-to-r from-purple-500 to-pink-500"></span>
+              To Do
+              <span className="text-sm text-gray-400 ml-2">({incompleteTasks.length})</span>
+            </h2>
+            <SortableTaskContainer
+              tasks={incompleteTasks}
+              onReorder={handleReorderTasks}
+              onToggleComplete={handleToggleComplete}
+              onEdit={openEditDialog}
+              onDelete={confirmDelete}
+              isUpdatingId={completingTaskId}
+              viewMode={viewMode}
+            />
+          </motion.div>
         )}
-      </div>
 
-      {/* Keep your existing Dialog components here - they are the same */}
+        {completedTasks.length > 0 && (
+          <motion.div
+            key="completed-section"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <h2 className="text-xl font-semibold text-gray-700 mb-4 flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500"></span>
+              Completed
+              <span className="text-sm text-gray-400 ml-2">({completedTasks.length})</span>
+            </h2>
+            <SortableTaskContainer
+              tasks={completedTasks}
+              onReorder={handleReorderTasks}
+              onToggleComplete={handleToggleComplete}
+              onEdit={openEditDialog}
+              onDelete={confirmDelete}
+              isUpdatingId={completingTaskId}
+              viewMode={viewMode}
+            />
+          </motion.div>
+        )}
+
+        {filteredTasks.length === 0 && (
+          <motion.div
+            key="empty-state"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="text-center py-20"
+          >
+            <div className="rounded-3xl p-12 backdrop-blur-xl bg-white/30 border border-white/20">
+              <Sparkles className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500 text-lg">No tasks found</p>
+              <Button
+                variant="link"
+                onClick={() => { setSearchTerm(''); setSelectedCategory('all'); }}
+                className="mt-2"
+              >
+                Clear filters
+              </Button>
+            </div>
+          </motion.div>
+        )}
+      </>
+    )}
+    </div>
+
+      {/* Create Task Dialog */}
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
         <DialogContent className="backdrop-blur-xl bg-white/90 border border-white/30 max-w-md">
           <DialogHeader>
@@ -433,9 +430,12 @@ export default function TaskManager() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Priority</label>
-                <Select value={String(formData.priority ?? 1)} onValueChange={(value) => setFormData({ ...formData, priority: parseInt(value as string) })}>
+                <Select
+                  value={String(formData.priority ?? 1)}
+                  onValueChange={(value) => setFormData({ ...formData, priority: parseInt(value as string) })}
+                >
                   <SelectTrigger className="bg-white/50">
-                    <SelectValue />
+                    <SelectValue placeholder="Select priority" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="0">Low</SelectItem>
@@ -446,9 +446,12 @@ export default function TaskManager() {
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Category</label>
-                <Select value={formData.category ?? 'other'} onValueChange={(value) => setFormData({ ...formData, category: value as string })}>
+                <Select
+                  value={formData.category ?? 'other'}
+                  onValueChange={(value) => setFormData({ ...formData, category: value as string })}
+                >
                   <SelectTrigger className="bg-white/50">
-                    <SelectValue />
+                    <SelectValue placeholder="Select category" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="work">💼 Work</SelectItem>
@@ -462,73 +465,100 @@ export default function TaskManager() {
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Due Date</label>
-              <DatePicker date={formData.dueDate ? new Date(formData.dueDate) : null} onSelect={(date) => setFormData({ ...formData, dueDate: date ? date.toISOString() : null })} />
+              <DatePicker
+                date={formData.dueDate ? new Date(formData.dueDate) : null}
+                onSelect={(date) => setFormData({ ...formData, dueDate: date ? date.toISOString() : null })}
+                placeholder="No due date"
+              />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleCreateTask} className="bg-gradient-to-r from-purple-500 to-pink-500">Create Task</Button>
+            <Button onClick={handleCreateTask} className="bg-gradient-to-r from-purple-500 to-pink-500 text-white">Create Task</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!editingTask} onOpenChange={() => setEditingTask(null)}>
-        <DialogContent className="backdrop-blur-xl bg-white/90 border border-white/30 max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-2xl bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">Edit Task</DialogTitle>
-            <DialogDescription>Update your task details.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Title *</label>
-              <Input value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} className="bg-white/50" />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Description</label>
-              <Textarea value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} rows={3} className="bg-white/50" />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
+      {/* Edit Dialog */}
+      {editingTask && (
+        <Dialog open={!!editingTask} onOpenChange={() => setEditingTask(null)}>
+          <DialogContent className="backdrop-blur-xl bg-white/90 border border-white/30 max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-2xl bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">Edit Task</DialogTitle>
+              <DialogDescription>Update your task details.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Priority</label>
-                <Select value={String(formData.priority ?? 1)} onValueChange={(value) => setFormData({ ...formData, priority: parseInt(value as string) })}>
-                  <SelectTrigger className="bg-white/50">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="0">Low</SelectItem>
-                    <SelectItem value="1">Medium</SelectItem>
-                    <SelectItem value="2">High</SelectItem>
-                  </SelectContent>
-                </Select>
+                <label className="text-sm font-medium">Title *</label>
+                <Input
+                  value={formData.title}
+                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  className="bg-white/50"
+                />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Category</label>
-                <Select value={formData.category ?? 'other'} onValueChange={(value) => setFormData({ ...formData, category: value as string })}>
-                  <SelectTrigger className="bg-white/50">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="work">💼 Work</SelectItem>
-                    <SelectItem value="personal">👤 Personal</SelectItem>
-                    <SelectItem value="shopping">🛒 Shopping</SelectItem>
-                    <SelectItem value="health">💪 Health</SelectItem>
-                    <SelectItem value="other">📌 Other</SelectItem>
-                  </SelectContent>
-                </Select>
+                <label className="text-sm font-medium">Description</label>
+                <Textarea
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  rows={3}
+                  className="bg-white/50"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Priority</label>
+                  <Select
+                    value={String(formData.priority ?? 1)}
+                    onValueChange={(value) => setFormData({ ...formData, priority: parseInt(value as string) })}
+                  >
+                    <SelectTrigger className="bg-white/50">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">Low</SelectItem>
+                      <SelectItem value="1">Medium</SelectItem>
+                      <SelectItem value="2">High</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Category</label>
+                  <Select
+                    value={formData.category ?? 'other'}
+                    onValueChange={(value) => setFormData({ ...formData, category: value as string })}
+                  >
+                    <SelectTrigger className="bg-white/50">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="work">💼 Work</SelectItem>
+                      <SelectItem value="personal">👤 Personal</SelectItem>
+                      <SelectItem value="shopping">🛒 Shopping</SelectItem>
+                      <SelectItem value="health">💪 Health</SelectItem>
+                      <SelectItem value="other">📌 Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Due Date</label>
+                <DatePicker
+                  date={formData.dueDate ? new Date(formData.dueDate) : null}
+                  onSelect={(date) => setFormData({ ...formData, dueDate: date ? date.toISOString() : null })}
+                  placeholder="No due date"
+                />
               </div>
             </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Due Date</label>
-              <DatePicker date={formData.dueDate ? new Date(formData.dueDate) : null} onSelect={(date) => setFormData({ ...formData, dueDate: date ? date.toISOString() : null })} />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingTask(null)}>Cancel</Button>
-            <Button onClick={handleUpdateTask} className="bg-gradient-to-r from-purple-500 to-pink-500">Save Changes</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setEditingTask(null)}>Cancel</Button>
+              <Button onClick={handleUpdateTask} className="bg-gradient-to-r from-purple-500 to-pink-500 text-white">Save Changes</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
+      {/* Delete Dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent className="backdrop-blur-xl bg-white/90 border border-white/30">
           <DialogHeader>
@@ -541,72 +571,6 @@ export default function TaskManager() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
-  );
-}
-
-// Glass Task Card Component
-// Glass Task Card Component - Fixed Badge Alignment
-function GlassTaskCard({ task, onToggleComplete, onEdit, onDelete, isUpdating, PriorityBadge, CategoryBadge, DueDateBadge, viewMode }: {
-  task: Task;
-  onToggleComplete: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
-  isUpdating: boolean;
-  PriorityBadge: React.ComponentType<{ priority: number }>;
-  CategoryBadge: React.ComponentType<{ category: string }>;
-  DueDateBadge: React.ComponentType<{ dueDate: string | null }>;
-  viewMode: 'list' | 'grid';
-}) {
-  return (
-    <div className={`rounded-2xl backdrop-blur-xl bg-white/40 border border-white/20 hover:shadow-2xl transition-all duration-300 hover:scale-[1.02] ${task.completed ? 'opacity-60' : ''}`}>
-      <div className="p-5">
-        <div className="flex items-start gap-4">
-          <button
-            onClick={onToggleComplete}
-            disabled={isUpdating}
-            className="mt-1 flex-shrink-0 hover:scale-110 transition-transform disabled:opacity-50"
-          >
-            {isUpdating ? (
-              <div className="h-6 w-6 animate-spin rounded-full border-2 border-purple-500 border-t-transparent" />
-            ) : task.completed ? (
-              <CheckCircle className="h-6 w-6 text-emerald-500" />
-            ) : (
-              <Circle className="h-6 w-6 text-gray-400" />
-            )}
-          </button>
-          <div className="flex-1 min-w-0">
-            <div className="flex flex-col gap-2">
-              {/* Title row */}
-              <h3 className={`font-semibold text-gray-800 ${task.completed ? 'line-through text-gray-400' : ''}`}>
-                {task.title}
-              </h3>
-              {/* Badges row - fixed alignment */}
-              <div className="flex flex-wrap items-center gap-2">
-                <PriorityBadge priority={task.priority} />
-                <CategoryBadge category={task.category} />
-                <DueDateBadge dueDate={task.dueDate} />
-              </div>
-            </div>
-            {task.description && (
-              <p className="text-sm text-gray-500 mt-3">{task.description}</p>
-            )}
-            {task.dueDate && (
-              <p className="text-xs text-gray-400 mt-2">
-                Due: {new Date(task.dueDate).toLocaleDateString()}
-              </p>
-            )}
-          </div>
-          <div className="flex gap-2 flex-shrink-0">
-            <Button variant="ghost" size="sm" onClick={onEdit} className="hover:bg-white/50">
-              <Pencil className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="sm" onClick={onDelete} className="hover:bg-white/50">
-              <Trash2 className="h-4 w-4 text-red-500" />
-            </Button>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
